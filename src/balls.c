@@ -234,6 +234,9 @@ void bounceWall(Ball *a) {
     collision between balls and the walls.
 */
 void renderBalls(int amnt, Ball* balls[]) {
+    /*
+        TODO: Optimize collision.
+    */
     for (int i = 0; i < amnt; i++) {
         for (int j = 0; j < amnt; j++) {
             if (i == j) continue;
