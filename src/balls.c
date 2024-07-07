@@ -10,8 +10,14 @@
 #define SCREEN_WIDTH 1200
 #define SCREEN_HEIGHT 600
 #define FPS 24
+#define BALLS_PER_SUBSPACE 4
+#define BALL_CORNER_COUNT 4
 #define FRAME_DELAY (1000 / FPS)
 #define pyth(a, b) (sqrt(pow(a, 2) + pow(b, 2)))
+
+int subspace_size_x;
+int subspace_size_y;
+int subspace_count;
 
 /*
     A simple vector for storing two dimensional data.
@@ -35,11 +41,17 @@ typedef struct vec2 {
     A struct to store data for a single ball.
     Contains fields for integer radius, a integer 2D vector for position, and
     an integer 2D vector for the balls velocity (i.e. direction).
+
+    The ball struct also contains the information about the subspaces where
+    the ball is located in. This is used for collision optimization.
+    The subspaces field is an int array of size 4.
+    The order of the corners is: top-left, top-right, bottom-left, bottom-right.
 */
 typedef struct Ball {
     int     radius;
     vec2    pos;
     vec2    dir;
+    int     subspaces[BALL_CORNER_COUNT];
 } Ball;
 
 SDL_Window *win;
@@ -78,6 +90,30 @@ int setup() {
     return 0;
 }
 
+void calculateSubspaces(Ball* ball) {
+    #define SW SCREEN_WIDTH
+    #define SH SCREEN_HEIGHT
+
+    double left = ball->pos.x - ball->radius;
+    double right = ball->pos.x + ball->radius;
+    double up = ball->pos.y - ball->radius;
+    double down = ball->pos.y + ball->radius;
+
+    // Subspaces per row.
+    int spr = SW / subspace_size_x;
+
+    // Subspaces per column.
+    int spc = SH / subspace_size_y;
+
+    ball->subspaces[0] = (left / SW) + (up / SH) * spr;
+    ball->subspaces[1] = (right / SW) + (up / SH) * spr;
+    ball->subspaces[2] = (left / SW) + (down / SH) * spr;
+    ball->subspaces[3] = (right / SW) + (down / SH) * spr;
+
+    #undef SW
+    #undef SH
+}
+
 /*
     Creates a ball of specified radius, located at specified x and y coordinates.
     Returns the pointer to the created ball.
@@ -93,6 +129,7 @@ Ball* makeBall(int x, int y, int r) {
     ball->dir.x = 0.0;
     ball->dir.y = 0.0;
 
+    calculateSubspaces(ball);
 
     return ball;
 }
@@ -253,6 +290,11 @@ void renderBalls(int amnt, Ball* balls[]) {
         }
 
         drawBall(balls[i]);
+        for (int k = 0; k < 4; k++) {
+            printf("%d\t", balls[i]->subspaces[k]);
+        }
+        printf("\n");
+        printf("There are %d subspaces!\n", subspace_count);
         moveBall(balls[i]);
         bounceWall(balls[i]);
     }
@@ -271,6 +313,8 @@ int main(int argc, char* argv[]) {
     int ball_amnt;
     int radius;
 
+    
+
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <number> <radius>\n", argv[0]);
         return 1;
@@ -279,6 +323,23 @@ int main(int argc, char* argv[]) {
         ball_amnt = atoi(argv[1]);
         radius = atoi(argv[2]);
     }
+
+    // Calculates the subspace size based on the assumption that each subspace
+    // will hold no more than a certian amount of balls.
+
+
+    subspace_size_x = (radius * 2 * BALLS_PER_SUBSPACE);
+    subspace_size_y = (radius * 2 * BALLS_PER_SUBSPACE);
+    while (SCREEN_WIDTH % subspace_size_x) {
+        subspace_size_x++;
+    }
+    printf("Each subspace is %d pixels wide\n", subspace_size_x);
+    while (SCREEN_HEIGHT % subspace_size_y) {
+        subspace_size_y++;
+    }
+    printf("Each subspace is %d pixels tall\n", subspace_size_y);
+
+    subspace_count = (SCREEN_WIDTH / subspace_size_x) * (SCREEN_HEIGHT / subspace_size_y);
 
     Ball* balls[ball_amnt];
 
