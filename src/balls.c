@@ -67,6 +67,8 @@ typedef struct LinkedContainer {
 SDL_Window *win;
 SDL_Renderer *ren;
 
+LinkedContainer *subspaceTracker;
+
 
 /*
     Sets up the SDL window and renderer.
@@ -310,6 +312,32 @@ void renderBalls(int amnt, Ball* balls[]) {
     }
 }
 
+void renderBallsImproved(int amnt, Ball* balls[]) {
+    /*
+        Go through the balls, add a ball to the corresponding subspace tracker cell.
+
+        Go to the cell, loop through the linked objects until finding the last; append ball at the end.
+    */
+
+    for (int i = 0; i < amnt; i++) {
+        Ball *ball = balls[i];
+        for (int j = 0; j < subspace_count; j++) {
+            int subspace = ball->subspaces[j];
+            if (subspaceTracker[subspace] == NULL) {
+                LinkedContainer container = {.subspace = subspace, .ball = ball, .next = NULL};
+                subspaceTracker[subspace] = &container;   
+            }
+            else {
+                LinkedContainer container = {subspace, ball, subspaceTracker[subspace]};
+                subspaceTracker[subspace] = &container;   
+            }
+        }
+    }
+
+    // TODO: Finish this lmao.
+    // You gotta loop through the subspaces in the tracker and then check all the balls colliding there.
+}
+
 /*
     Main function.
     The intented usage is to provide two numerical arguments:
@@ -323,9 +351,6 @@ int main(int argc, char* argv[]) {
     int ball_amnt;
     int radius;
 
-    
-
-    
 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <number> <radius>\n", argv[0]);
@@ -352,6 +377,12 @@ int main(int argc, char* argv[]) {
     printf("Each subspace is %d pixels tall\n", subspace_size_y);
 
     subspace_count = (SCREEN_WIDTH / subspace_size_x) * (SCREEN_HEIGHT / subspace_size_y);
+
+    subspaceTracker = malloc(subspace_count * sizeof(LinkedContainer));
+
+    for (int i = 0; i < subspace_count; i++) {
+        subspaceTracker[i] = NULL;
+    }
 
     Ball* balls[ball_amnt];
 
