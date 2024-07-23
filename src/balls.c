@@ -8,7 +8,7 @@
 
 
 #define SCREEN_WIDTH 1200
-#define SCREEN_HEIGHT 600
+#define SCREEN_HEIGHT 1200
 #define FPS 24
 #define BALLS_PER_SUBSPACE 4
 #define BALL_CORNER_COUNT 4
@@ -54,6 +54,16 @@ typedef struct Ball {
     int     subspaces[BALL_CORNER_COUNT];
 } Ball;
 
+/*
+    Simple Linked List like struct for storing references to balls
+    within each subspace. Used for collision optimization.
+*/
+typedef struct LinkedContainer {
+    int                 subspace;
+    Ball*               ball;
+    LinkedContainer*    next;
+} LinkedContainer;
+
 SDL_Window *win;
 SDL_Renderer *ren;
 
@@ -69,7 +79,7 @@ int setup() {
 
     win = SDL_CreateWindow(
         "Bouncy Balls",
-        50, 50,
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         SCREEN_WIDTH, SCREEN_HEIGHT,
         SDL_WINDOW_SHOWN);
 
@@ -312,6 +322,8 @@ int main(int argc, char* argv[]) {
     // Amount of balls to give in the simulation
     int ball_amnt;
     int radius;
+
+    
 
     
 
