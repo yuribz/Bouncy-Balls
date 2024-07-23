@@ -58,16 +58,17 @@ typedef struct Ball {
     Simple Linked List like struct for storing references to balls
     within each subspace. Used for collision optimization.
 */
-typedef struct LinkedContainer {
+typedef struct LinkedContainer LinkedContainer;
+struct LinkedContainer {
     int                 subspace;
     Ball*               ball;
     LinkedContainer*    next;
-} LinkedContainer;
+};
 
 SDL_Window *win;
 SDL_Renderer *ren;
 
-LinkedContainer *subspaceTracker;
+LinkedContainer *(*subspaceTracker);
 
 
 /*
@@ -378,7 +379,7 @@ int main(int argc, char* argv[]) {
 
     subspace_count = (SCREEN_WIDTH / subspace_size_x) * (SCREEN_HEIGHT / subspace_size_y);
 
-    subspaceTracker = malloc(subspace_count * sizeof(LinkedContainer));
+    subspaceTracker = malloc(sizeof(LinkedContainer*) * subspace_count);
 
     for (int i = 0; i < subspace_count; i++) {
         subspaceTracker[i] = NULL;
