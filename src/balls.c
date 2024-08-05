@@ -70,6 +70,8 @@ SDL_Renderer *ren;
 
 LinkedContainer *(*subspaceTracker);
 
+bool pause = false;
+
 
 /*
     Sets up the SDL window and renderer.
@@ -123,10 +125,12 @@ void calculateSubspaces(Ball* ball) {
     #define SSX subspace_size_x
     #define SSY subspace_size_y
 
-    ball->subspaces[0] = (left / SSX) + (up / SSY) * spr;
-    ball->subspaces[1] = (right / SSX) + (up / SSY) * spr;
-    ball->subspaces[2] = (left / SSX) + (down / SSY) * spr;
-    ball->subspaces[3] = (right / SSX) + (down / SSY) * spr;
+    #define int_divide(n1, n2) ((int) (n1 / n2))
+
+    ball->subspaces[0] = int_divide(left, SSX) + int_divide(up, SSY) * spr;
+    ball->subspaces[1] = int_divide(right, SSX) + int_divide(up, SSY) * spr;
+    ball->subspaces[2] = int_divide(left, SSX) + int_divide(down, SSY) * spr;
+    ball->subspaces[3] = int_divide(right, SSX) + int_divide(down, SSY) * spr;
 
     #undef SW
     #undef SH
@@ -321,9 +325,6 @@ void freeContainer(LinkedContainer *container) {
     if (container->next != NULL) {
         freeContainer(container->next);
     }
-    else {
-        return;
-    }
 
     container->ball = NULL;
     free(container);
@@ -347,7 +348,7 @@ void assignSubspaces(int amnt, Ball* balls[]) {
             int subspace = ball->subspaces[j];
 
             // if the ball is on the edge, it can be in an out of bounds subspace
-            if (subspace > subspace_count || subspace < 0) {
+            if (subspace >= subspace_count || subspace < 0) {
                 continue;
             }
             // printf("Subspace: %d\n", subspace);
@@ -362,83 +363,120 @@ void assignSubspaces(int amnt, Ball* balls[]) {
             }
             else {
                 LinkedContainer *tempContainer = subspaceTracker[subspace];
+                LinkedContainer *prevContainer = NULL;
 
                 // this is checking whether the ball is already in the subspace or not
                 bool already_added = false;
-                while (tempContainer->next != NULL) {
+
+                while (tempContainer != NULL) {
                     if (tempContainer->ball == ball) {
                         already_added = true;
                         break;
                     }
                     else {
+                        prevContainer = tempContainer;
                         tempContainer = tempContainer->next;
                     }
                 }
+
                 if (!already_added) {
-                    tempContainer->next = container;
+                    prevContainer->next = container;
+                }
+                else {
+                    free(container);
                 }
             }
         }
     }
+}
+
+int calculateDepth(LinkedContainer *container) {
+    if (container == NULL) {
+        return 0;
+    }
+    else {
+        return 1 + calculateDepth(container->next);
+    }
+}
+
+struct CollisionTracker {
+        Ball* ball1;
+        Ball* ball2;
+    };
+
+bool checkCollisionsRecorded(struct CollisionTracker recordedList[], int recordedCount, Ball* b1, Ball* b2) {
+    for (int i = 0; i < recordedCount; i++) {
+        struct CollisionTracker ct= recordedList[i];
+        if ((ct.ball1 == b1 && ct.ball2 == b2) || (ct.ball1 == b2 && ct.ball2 == b1)) return true;
+    }
+    return false;
 }
 
 void collideBalls(int amnt, Ball* balls[]) {
-    // printf("Colliding balls with each other...\n");
+    // keeps track of what collisions happened on this frame.
+    // this is needed to avoid collisions that cancel each other out
+    struct CollisionTracker collisionsRecorded[amnt * 2];
+    int currentCollision = 0;
+
     for (int subspace = 0; subspace < subspace_count; subspace++) {
         LinkedContainer *container1 = subspaceTracker[subspace];
 
-        printf("Subspace: %d ", subspace);
+        // printf("Subspace: %d ", subspace);
         
         // if the subspace is empty, move on to the next one
         if (container1 == NULL) {
-            printf("empty\n");
-            continue;
+            // printf("empty");
         }
+        else {
+            while (container1 != NULL) {
+                // fetch the reference to the ball from the first container
+                Ball *ball1 = container1->ball;
+                // printf("(%f %f) ", ball1->pos.x, ball1->pos.y);
+                LinkedContainer *container2 = subspaceTracker[subspace];
 
+                // check the containers in the same subspace to see if any balls collide
+                while (container2 != NULL) {
+                    Ball *ball2 = container2->ball;
 
-        while (container1->next != NULL) {
-            Ball *ball1 = container1->ball;
-            printf("(%f %f)", ball1->pos.x, ball1->pos.y);
-            LinkedContainer *container2 = subspaceTracker[subspace];
-
-            // check the containers in the same subspace to see if any balls collide
-            while (container2->next != NULL) {
-                Ball *ball2 = container2->ball;
-
-                if (ball1 != ball2) {
-                    if (overlaps(ball1, ball2)) {
-                        // printf("Boop! Ball at %f %f collided with ball at %f %f\n", ball1->pos.x, ball1->pos.y, ball2->pos.x, ball2->pos.y);
-                        bounce(ball1, ball2);
-                        break;
+                    if (ball1 != ball2 && !checkCollisionsRecorded(collisionsRecorded, currentCollision, ball1, ball2)) {
+                        if (overlaps(ball1, ball2)) {
+                            // printf("Boop! Ball at %f %f collided with ball at %f %f\n", ball1->pos.x, ball1->pos.y, ball2->pos.x, ball2->pos.y);
+                            bounce(ball1, ball2);
+                            collisionsRecorded[currentCollision].ball1 = ball1;
+                            collisionsRecorded[currentCollision].ball2 = ball2;
+                            currentCollision++;
+                            // printf("X ");
+                        }
                     }
+                    container2 = container2->next;
                 }
-
-                container2 = container2->next;
+                container1 = container1->next;
             }
-            
-            container1 = container1->next;
         }
-
-        printf("\n");
+        // printf("\n");
     }
 }
 
+/*
+    Improved version of rendering and collision algorithm, using subspaces to only check
+    balls that can collide realistically within the frame.
+*/
 void renderBallsImproved(int amnt, Ball* balls[]) {
-    /*
-        Go through the balls, add a ball to the corresponding subspace tracker cell.
-
-        Go to the cell, loop through the linked objects until finding the last; append ball at the end.
-    */
     
+    // assigns the balls to subspaces and generates the linked containers for each subspace
     assignSubspaces(amnt, balls);
+    // performs the calculation of determining whether the ball has collided or not
     collideBalls(amnt, balls);
     
     for (int i = 0; i < amnt; i++) {
         Ball *ball = balls[i];
         SDL_SetRenderDrawColor(ren, 255, 255, 255, 255);
         drawBall(ball);
-        moveBall(ball);
-        bounceWall(ball);
+        if (!pause) {
+            moveBall(ball);
+            bounceWall(ball);
+        }
+        
     }
 
     // TODO: Finish this lmao.
@@ -546,6 +584,8 @@ int main(int argc, char* argv[]) {
                             quit_event.type = SDL_QUIT;
                             SDL_PushEvent(&quit_event);
                             break;
+                        case SDLK_p :
+                            pause = pause ? false : true;
                     }
             }
         }
