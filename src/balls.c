@@ -107,6 +107,8 @@ void calculateSubspaces(Ball* ball) {
     #define SW SCREEN_WIDTH
     #define SH SCREEN_HEIGHT
 
+    // printf("Calculating subspaces for ball %p\n", ball);
+
     double left = ball->pos.x - ball->radius;
     double right = ball->pos.x + ball->radius;
     double up = ball->pos.y - ball->radius;
@@ -303,9 +305,6 @@ void renderBalls(int amnt, Ball* balls[]) {
         }
 
         drawBall(balls[i]);
-        for (int k = 0; k < 4; k++) {
-            printf("%d\t", balls[i]->subspaces[k]);
-        }
         printf("\n");
         printf("There are %d subspaces!\n", subspace_count);
         moveBall(balls[i]);
@@ -320,20 +319,109 @@ void renderBallsImproved(int amnt, Ball* balls[]) {
         Go to the cell, loop through the linked objects until finding the last; append ball at the end.
     */
 
+   // This clears the subspaceTracker, since it must start a new every frame
+   for (int i = 0; i < subspace_count; i++) {
+        subspaceTracker[i] = NULL;
+   }
+
+    printf("Assigning subspaces...\n");
     for (int i = 0; i < amnt; i++) {
         Ball *ball = balls[i];
-        for (int j = 0; j < subspace_count; j++) {
+        calculateSubspaces(balls[i]);
+        for (int j = 0; j < BALL_CORNER_COUNT; j++) {
             int subspace = ball->subspaces[j];
+            // printf("Subspace: %d\n", subspace);
+            LinkedContainer *container = malloc(sizeof(LinkedContainer));
+
+            container->subspace = subspace;
+            container->ball = ball;
+            container->next = NULL;
+
+            
+
             if (subspaceTracker[subspace] == NULL) {
-                LinkedContainer container = {.subspace = subspace, .ball = ball, .next = NULL};
-                subspaceTracker[subspace] = &container;   
+                subspaceTracker[subspace] = container;   
             }
             else {
-                LinkedContainer container = {subspace, ball, subspaceTracker[subspace]};
-                subspaceTracker[subspace] = &container;   
+                LinkedContainer *tempContainer = subspaceTracker[subspace];
+                while (tempContainer->next != NULL) {
+                    // printf("Current container: %p\n", tempContainer);
+                    // printf("Next container: %p\n", tempContainer->next);
+                    // SDL_Delay(1000);
+                    if (tempContainer->ball == ball) {
+                        break;
+                    }
+                    else {
+                        tempContainer = tempContainer->next;
+                    }
+                    // printf("Moving on to the next container\n");
+                }
+                tempContainer->next = container;
             }
         }
     }
+
+    // for (int i = 0; i < subspace_count; i++) {
+    //     printf("%p\n", subspaceTracker[i]);
+    // }
+
+    printf("Rendering balls and their collision...\n");
+    int balls_counter = 0;
+    Ball *(*already_rendered) = malloc(sizeof(Ball*) * amnt);
+    for (int subspace = 0; subspace < subspace_count; subspace++) {
+        LinkedContainer *container1 = subspaceTracker[subspace];
+        if (container1 == NULL) {
+            continue;
+        }
+        while (container1->next != NULL) {
+            Ball *ball1 = container1->ball;
+
+            // Check if the ball is already rendered...
+            bool rendered = false;
+            for (int i = 0; i < balls_counter; i++) {
+                if (already_rendered[i] == ball1) {
+                    rendered = true;
+                    break;
+                }
+            }
+
+            LinkedContainer *container2 = subspaceTracker[subspace];
+
+            // check the containers in the same subspace to see if any balls collide
+            while (container2->next != NULL) {
+                Ball *ball2 = container2->ball;
+
+                // printf("Container one: %p\n", container1);
+                // printf("Container two: %p\n", container2);
+                // SDL_Delay(1000);
+
+                if (ball1 != ball2) {
+                    if (overlaps(ball1, ball2)) {
+                        SDL_SetRenderDrawColor(ren, 255, 0, 0, 255);
+                        bounce(ball1, ball2);
+                        break;
+                    }
+                    else {
+                        SDL_SetRenderDrawColor(ren, 0, 0, 255, 255);
+                    }
+                }
+
+                container2 = container2->next;
+            }
+
+            // if the ball hasn't been rendered before, move it and bounce along the wall
+            if (!rendered) {
+                already_rendered[balls_counter++] = ball1;
+                drawBall(ball1);
+                moveBall(ball1);
+                bounceWall(ball1);
+            }
+            container1 = container1->next;
+        }
+
+        
+    }
+    printf("%d balls have been rendered!\n", balls_counter);
 
     // TODO: Finish this lmao.
     // You gotta loop through the subspaces in the tracker and then check all the balls colliding there.
@@ -415,7 +503,7 @@ int main(int argc, char* argv[]) {
         SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
         SDL_RenderClear(ren);
 
-        renderBalls(ball_amnt, balls);
+        renderBallsImproved(ball_amnt, balls);
 
         while(SDL_PollEvent(&e)) {
             switch (e.type) {
