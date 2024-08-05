@@ -345,6 +345,11 @@ void assignSubspaces(int amnt, Ball* balls[]) {
         calculateSubspaces(balls[i]);
         for (int j = 0; j < BALL_CORNER_COUNT; j++) {
             int subspace = ball->subspaces[j];
+
+            // if the ball is on the edge, it can be in an out of bounds subspace
+            if (subspace > subspace_count || subspace < 0) {
+                continue;
+            }
             // printf("Subspace: %d\n", subspace);
             LinkedContainer *container = malloc(sizeof(LinkedContainer));
 
